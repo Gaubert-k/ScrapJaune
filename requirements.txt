@@ -1,3 +1,22 @@
-selenium~=4.33.0
-pymongo>=4.0.0
-python-dateutil>=2.8.0
+# Dépendances pour ScrapJaune - Scraper PagesJaunes avec MongoDB
+
+# Web scraping
+selenium>=4.15.0
+
+# Base de données MongoDB
+pymongo>=4.5.0
+
+# Optionnel : pour de meilleures performances
+dnspython>=2.4.0
+
+# Gestion des dates et logs (inclus dans Python standard)
+# datetime
+# logging
+# json
+# hashlib
+# time
+# os
+# sys
+# glob
+
+# Note : ChromeDriver sera géré automatiquement par Selenium 4+
