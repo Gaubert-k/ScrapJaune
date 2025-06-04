@@ -16,16 +16,16 @@ try:
     # Aller sur pagesjaunes.fr
     driver.get("https://www.pagesjaunes.fr")
     
-    # Attendre plus longtemps que la page se charge
+    # Attendre que la page se charge
     print("Chargement de la page...")
-    time.sleep(5)
+    time.sleep(3)
     
     # OBLIGATOIRE : Basculer vers l'iframe et fermer la popup
     print("Recherche de l'iframe de consentement...")
     popup_fermee = False
     
     try:
-        wait = WebDriverWait(driver, 30)
+        wait = WebDriverWait(driver, 15)  # Réduit de 30 à 15 secondes
         
         # Trouver l'iframe de consentement
         iframe = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "iframe[title*='consentement'], iframe[title*='Fenêtre de consentement']")))
@@ -46,7 +46,7 @@ try:
         for selector in selectors:
             try:
                 print(f"Essai du sélecteur dans iframe: {selector}")
-                bouton_accepter = WebDriverWait(driver, 10).until(
+                bouton_accepter = WebDriverWait(driver, 5).until(  # Réduit de 10 à 5 secondes
                     EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
                 )
                 bouton_accepter.click()
@@ -54,8 +54,7 @@ try:
                 popup_fermee = True
                 break
             except Exception as e:
-                print(f"Sélecteur {selector} échoué: {e}")
-                continue
+                continue  # Pas de print pour aller plus vite
         
         # Revenir au document principal
         driver.switch_to.default_content()
@@ -65,9 +64,9 @@ try:
             print("❌ ERREUR: Impossible de fermer la popup dans l'iframe.")
             exit()
         
-        # Attendre que la popup disparaisse complètement
+        # Attendre que la popup disparaisse - réduit de 8 à 4 secondes
         print("Attente du chargement de la page principale...")
-        time.sleep(8)
+        time.sleep(4)
         
         # Vérifier que les champs de recherche sont maintenant présents
         wait.until(EC.presence_of_element_located((By.ID, "quoiqui")))
@@ -81,8 +80,8 @@ try:
     
     print("Remplissage des champs...")
     
-    # Remplir les champs
-    wait = WebDriverWait(driver, 15)
+    # Remplir les champs - réduit de 15 à 10 secondes
+    wait = WebDriverWait(driver, 10)
     
     # Champ "quoi/qui"
     champ_quoiqui = wait.until(EC.element_to_be_clickable((By.ID, "quoiqui")))
@@ -101,7 +100,7 @@ try:
     bouton_recherche.click()
     print("✓ Recherche lancée")
     
-    time.sleep(5)
+    time.sleep(3)  # Réduit de 5 à 3 secondes
     print("🎉 Terminé !")
     
 except Exception as e:
