@@ -114,116 +114,175 @@ try:
     # Parcourir tous les résultats
     print("Recherche des résultats...")
     
-    try:
-        # Trouver tous les éléments de résultats
-        resultats = driver.find_elements(By.CSS_SELECTOR, "li.bi.bi-generic")
-        print(f"✓ {len(resultats)} résultats trouvés")
+    page_actuelle = 1
+    numero_resultat_global = 1
+    
+    while True:
+        print(f"\n=== PAGE {page_actuelle} ===")
         
-        if not resultats:
-            print("❌ Aucun résultat trouvé")
-        else:
-            # Parcourir chaque résultat
-            for i, resultat in enumerate(resultats, 1):
-                try:
-                    print(f"\n--- Traitement du résultat {i}/{len(resultats)} ---")
-                    
-                    # Trouver le lien principal (nom de l'établissement)
-                    lien_principal = resultat.find_element(By.CSS_SELECTOR, "a.bi-denomination")
-                    nom_etablissement = lien_principal.text.strip()
-                    href = lien_principal.get_attribute("href")
-                    
-                    print(f"Établissement: {nom_etablissement}")
-                    print(f"Lien href: {href}")
-                    
-                    # Sauvegarder l'onglet principal
-                    onglet_principal = driver.current_window_handle
-                    
-                    url_finale = None
-                    
-                    # Si le href est "#" ou contient chercherlespros, récupérer l'URL depuis data-pjlb
-                    if href == "#" or not href or "chercherlespros" in href:
-                        print("Lien dynamique détecté - Décodage de data-pjlb...")
-                        try:
-                            data_pjlb = lien_principal.get_attribute("data-pjlb")
-                            if data_pjlb:
-                                # Décoder le JSON
-                                pjlb_data = json.loads(data_pjlb)
-                                url_encoded = pjlb_data.get("url", "")
-                                if url_encoded:
-                                    # Décoder de base64
-                                    url_decoded = base64.b64decode(url_encoded).decode('utf-8')
-                                    # Construire l'URL complète
-                                    url_finale = f"https://www.pagesjaunes.fr{url_decoded}"
-                                    print(f"URL décodée: {url_finale}")
-                                else:
-                                    print("⚠️  Pas d'URL dans data-pjlb - Ignoré")
-                                    continue
-                            else:
-                                print("⚠️  Pas de data-pjlb trouvé - Ignoré")
-                                continue
-                        except Exception as e:
-                            print(f"⚠️  Erreur lors du décodage data-pjlb: {e} - Ignoré")
-                            continue
-                    else:
-                        # Vérifier si c'est un vrai lien de professionnel
-                        if "/pros/" not in href:
-                            print("⚠️  Lien invalide ou ne pointe pas vers un professionnel - Ignoré")
-                            continue
-                        url_finale = href
-                    
-                    # Ouvrir l'URL finale dans un nouvel onglet
-                    driver.execute_script("window.open(arguments[0], '_blank');", url_finale)
-                    print("✓ Nouvel onglet ouvert")
-                    
-                    # Attendre un peu que l'onglet s'ouvre
-                    time.sleep(2)
-                    
-                    # Basculer vers le nouvel onglet
-                    tous_onglets = driver.window_handles
-                    if len(tous_onglets) > 1:
-                        nouvel_onglet = [onglet for onglet in tous_onglets if onglet != onglet_principal][0]
-                        driver.switch_to.window(nouvel_onglet)
-                        print("✓ Basculement vers le nouvel onglet")
-                        
-                        # Attendre que la page se charge
-                        time.sleep(3)
-                        
-                        # Vérifier que nous sommes bien sur une page de professionnel
-                        url_actuelle = driver.current_url
-                        print(f"Page chargée: {url_actuelle}")
-                        
-                        if "chercherlespros" in url_actuelle:
-                            print("⚠️  Page redirigée vers la recherche - Lien invalide")
-                            driver.close()
-                            driver.switch_to.window(onglet_principal)
-                            continue
-                        
-                        # Fermer l'onglet actuel
-                        driver.close()
-                        print("✓ Onglet fermé")
-                        
-                        # Revenir à l'onglet principal
-                        driver.switch_to.window(onglet_principal)
-                        print("✓ Retour à l'onglet principal")
-                    else:
-                        print("⚠️  Aucun nouvel onglet créé - Ignoré")
-                    
-                    # Petite pause entre les résultats
-                    time.sleep(2)
-                    
-                except Exception as e:
-                    print(f"❌ Erreur lors du traitement du résultat {i}: {e}")
-                    # S'assurer qu'on est sur l'onglet principal
+        try:
+            # Trouver tous les éléments de résultats
+            resultats = driver.find_elements(By.CSS_SELECTOR, "li.bi.bi-generic")
+            print(f"✓ {len(resultats)} résultats trouvés sur cette page")
+            
+            if not resultats:
+                print("❌ Aucun résultat trouvé sur cette page")
+                break
+            else:
+                # Parcourir chaque résultat
+                for i, resultat in enumerate(resultats, 1):
                     try:
-                        driver.switch_to.window(onglet_principal)
-                    except:
-                        pass
-                    continue
+                        print(f"\n--- Traitement du résultat {numero_resultat_global} (page {page_actuelle}, #{i}) ---")
+                        
+                        # Trouver le lien principal (nom de l'établissement)
+                        lien_principal = resultat.find_element(By.CSS_SELECTOR, "a.bi-denomination")
+                        nom_etablissement = lien_principal.text.strip()
+                        href = lien_principal.get_attribute("href")
+                        
+                        print(f"Établissement: {nom_etablissement}")
+                        print(f"Lien href: {href}")
+                        
+                        # Sauvegarder l'onglet principal
+                        onglet_principal = driver.current_window_handle
+                        
+                        url_finale = None
+                        
+                        # Si le href est "#" ou contient chercherlespros, récupérer l'URL depuis data-pjlb
+                        if href == "#" or not href or "chercherlespros" in href:
+                            print("Lien dynamique détecté - Décodage de data-pjlb...")
+                            try:
+                                data_pjlb = lien_principal.get_attribute("data-pjlb")
+                                if data_pjlb:
+                                    # Décoder le JSON
+                                    pjlb_data = json.loads(data_pjlb)
+                                    url_encoded = pjlb_data.get("url", "")
+                                    if url_encoded:
+                                        # Décoder de base64
+                                        url_decoded = base64.b64decode(url_encoded).decode('utf-8')
+                                        # Construire l'URL complète
+                                        url_finale = f"https://www.pagesjaunes.fr{url_decoded}"
+                                        print(f"URL décodée: {url_finale}")
+                                    else:
+                                        print("⚠️  Pas d'URL dans data-pjlb - Ignoré")
+                                        numero_resultat_global += 1
+                                        continue
+                                else:
+                                    print("⚠️  Pas de data-pjlb trouvé - Ignoré")
+                                    numero_resultat_global += 1
+                                    continue
+                            except Exception as e:
+                                print(f"⚠️  Erreur lors du décodage data-pjlb: {e} - Ignoré")
+                                numero_resultat_global += 1
+                                continue
+                        else:
+                            # Vérifier si c'est un vrai lien de professionnel
+                            if "/pros/" not in href:
+                                print("⚠️  Lien invalide ou ne pointe pas vers un professionnel - Ignoré")
+                                numero_resultat_global += 1
+                                continue
+                            url_finale = href
+                        
+                        # Ouvrir l'URL finale dans un nouvel onglet
+                        driver.execute_script("window.open(arguments[0], '_blank');", url_finale)
+                        print("✓ Nouvel onglet ouvert")
+                        
+                        # Attendre un peu que l'onglet s'ouvre
+                        time.sleep(2)
+                        
+                        # Basculer vers le nouvel onglet
+                        tous_onglets = driver.window_handles
+                        if len(tous_onglets) > 1:
+                            nouvel_onglet = [onglet for onglet in tous_onglets if onglet != onglet_principal][0]
+                            driver.switch_to.window(nouvel_onglet)
+                            print("✓ Basculement vers le nouvel onglet")
+                            
+                            # Attendre que la page se charge
+                            time.sleep(3)
+                            
+                            # Vérifier que nous sommes bien sur une page de professionnel
+                            url_actuelle = driver.current_url
+                            print(f"Page chargée: {url_actuelle}")
+                            
+                            if "chercherlespros" in url_actuelle:
+                                print("⚠️  Page redirigée vers la recherche - Lien invalide")
+                                driver.close()
+                                driver.switch_to.window(onglet_principal)
+                                numero_resultat_global += 1
+                                continue
+                            
+                            # Fermer l'onglet actuel
+                            driver.close()
+                            print("✓ Onglet fermé")
+                            
+                            # Revenir à l'onglet principal
+                            driver.switch_to.window(onglet_principal)
+                            print("✓ Retour à l'onglet principal")
+                        else:
+                            print("⚠️  Aucun nouvel onglet créé - Ignoré")
+                        
+                        # Petite pause entre les résultats
+                        time.sleep(2)
+                        numero_resultat_global += 1
+                        
+                    except Exception as e:
+                        print(f"❌ Erreur lors du traitement du résultat {numero_resultat_global}: {e}")
+                        # S'assurer qu'on est sur l'onglet principal
+                        try:
+                            driver.switch_to.window(onglet_principal)
+                        except:
+                            pass
+                        numero_resultat_global += 1
+                        continue
+                
+                print(f"\n✓ Page {page_actuelle} terminée ({len(resultats)} résultats traités)")
+        
+        except Exception as e:
+            print(f"❌ Erreur lors de la recherche des résultats sur la page {page_actuelle}: {e}")
+            break
+        
+        # Chercher le lien "Suivant" pour passer à la page suivante
+        print(f"\nRecherche du lien 'Suivant'...")
+        try:
+            lien_suivant = driver.find_element(By.CSS_SELECTOR, "a.link_pagination.next")
+            print("✓ Lien 'Suivant' trouvé")
             
-            print(f"\n🎉 Traitement terminé pour {len(resultats)} résultats !")
-            
-    except Exception as e:
-        print(f"❌ Erreur lors de la recherche des résultats: {e}")
+            # Décoder l'URL de la page suivante
+            try:
+                data_pjlb = lien_suivant.get_attribute("data-pjlb")
+                if data_pjlb:
+                    # Décoder le JSON
+                    pjlb_data = json.loads(data_pjlb)
+                    url_encoded = pjlb_data.get("url", "")
+                    if url_encoded:
+                        # Décoder de base64
+                        url_decoded = base64.b64decode(url_encoded).decode('utf-8')
+                        # Construire l'URL complète
+                        url_page_suivante = f"https://www.pagesjaunes.fr{url_decoded}"
+                        print(f"URL page suivante: {url_page_suivante}")
+                        
+                        # Naviguer vers la page suivante
+                        driver.get(url_page_suivante)
+                        print("✓ Navigation vers la page suivante")
+                        
+                        # Attendre que la nouvelle page se charge
+                        time.sleep(5)
+                        page_actuelle += 1
+                        
+                    else:
+                        print("⚠️  Pas d'URL dans data-pjlb du lien suivant - Fin de pagination")
+                        break
+                else:
+                    print("⚠️  Pas de data-pjlb dans le lien suivant - Fin de pagination")
+                    break
+            except Exception as e:
+                print(f"⚠️  Erreur lors du décodage du lien suivant: {e} - Fin de pagination")
+                break
+                
+        except Exception as e:
+            print("⚠️  Pas de lien 'Suivant' trouvé - Fin de pagination")
+            break
+    
+    print(f"\n🎉 Traitement terminé pour {numero_resultat_global-1} résultats sur {page_actuelle} page(s) !")
     
 except Exception as e:
     print(f"❌ Erreur: {e}")
