@@ -46,15 +46,19 @@ class MongoDBStorage:
 
     def create_indexes(self):
         try:
+            # Index pour la recherche textuelle
             self.collection.create_index([("name", "text"), ("type", "text")])
 
-            self.collection.create_index("address.postal_code")
-            self.collection.create_index("address.city")
+            # Index sur l'adresse (adaptée à la structure du scraper)
+            self.collection.create_index("address")
 
+            # Index sur les métadonnées
             self.collection.create_index("metadata.note_moyenne")
             self.collection.create_index("metadata.nombre_avis")
-
             self.collection.create_index("metadata.hash_id", unique=True)
+
+            # Index sur le type de professionnel
+            self.collection.create_index("professional")
 
             logger.info("Index créés")
 
@@ -63,29 +67,95 @@ class MongoDBStorage:
 
     def generate_hash_id(self, business: Dict) -> str:
         # Utiliser nom + adresse pour créer un hash unique
-        identifier = f"{business.get('name', '')}-{business.get('address', {}).get('full_address', '')}"
+        identifier = f"{business.get('name', '')}-{business.get('address', '')}"
         return hashlib.md5(identifier.encode('utf-8')).hexdigest()
 
+    def _extraire_note_moyenne(self, avis: List) -> float:
+        """Calcule la note moyenne à partir des avis"""
+        if not avis:
+            return 0.0
+        
+        total = 0
+        count = 0
+        
+        for avis_item in avis:
+            if isinstance(avis_item, list) and len(avis_item) >= 1:
+                try:
+                    # Extraire la note (format "4/5" ou "4")
+                    note_str = str(avis_item[0]).strip()
+                    if '/' in note_str:
+                        note = float(note_str.split('/')[0])
+                    else:
+                        note = float(note_str)
+                    total += note
+                    count += 1
+                except (ValueError, IndexError):
+                    continue
+        
+        return round(total / count, 2) if count > 0 else 0.0
+
+    def _extraire_horaires_dict(self, horaires: List) -> Dict:
+        """Convertit les horaires du format liste vers dictionnaire"""
+        horaires_dict = {}
+        
+        for horaire_item in horaires:
+            if isinstance(horaire_item, list) and len(horaire_item) >= 1:
+                horaire_str = str(horaire_item[0])
+                
+                # Format attendu: "09:00-12:00 / 14:00-18:00 -> Lundi"
+                if ' -> ' in horaire_str:
+                    horaires_part, jour = horaire_str.split(' -> ')
+                    horaires_dict[jour.strip()] = horaires_part.strip()
+        
+        return horaires_dict
+
     def prepare_document(self, business: Dict) -> Dict:
-        document = business.copy()
-        document["metadata"]["hash_id"] = self.generate_hash_id(business)
-
-        document["metadata"]["inserted_at"] = datetime.now(timezone.utc)
-
-        document["searchable_name"] = business.get("name", "").lower()
-        document["has_reviews"] = len(business.get("avis", [])) > 0
-        document["has_schedule"] = len(business.get("horaires", {})) > 0
+        """Prépare le document pour insertion en adaptant la structure du scraper"""
+        
+        # Calculer les métadonnées
+        avis = business.get("avis", [])
+        note_moyenne = self._extraire_note_moyenne(avis)
+        nombre_avis = len(avis)
+        
+        # Convertir les horaires
+        horaires_dict = self._extraire_horaires_dict(business.get("horaire", []))
+        
+        document = {
+            "name": business.get("name", "").strip(),
+            "professional": business.get("professional", "false") == "true",
+            "type": business.get("type", "").strip(),
+            "address": business.get("address", "").strip(),
+            "avis": avis,
+            "horaires": horaires_dict,
+            "metadata": {
+                "hash_id": self.generate_hash_id(business),
+                "inserted_at": datetime.now(timezone.utc),
+                "note_moyenne": note_moyenne,
+                "nombre_avis": nombre_avis,
+                "source": "pagesjaunes_scraper"
+            },
+            "searchable_name": business.get("name", "").lower(),
+            "has_reviews": nombre_avis > 0,
+            "has_schedule": len(horaires_dict) > 0
+        }
 
         return document
 
     def insert_business(self, business: Dict) -> bool:
         try:
+            # Ignorer les établissements sans nom
+            if not business.get("name", "").strip():
+                self.stats["errors"] += 1
+                logger.debug("Établissement ignoré (pas de nom)")
+                return False
+                
             document = self.prepare_document(business)
 
             result = self.collection.insert_one(document)
 
             if result.inserted_id:
                 self.stats["inserted"] += 1
+                logger.debug(f"Inséré: {document['name']}")
                 return True
             else:
                 self.stats["errors"] += 1
@@ -105,7 +175,7 @@ class MongoDBStorage:
 
                 if result.modified_count > 0:
                     self.stats["updated"] += 1
-                    logger.debug(f"Mise à jour: {business.get('name', 'Inconnu')}")
+                    logger.debug(f"Mis à jour: {business.get('name', 'Inconnu')}")
                 else:
                     self.stats["duplicates"] += 1
                     logger.debug(f"Doublon ignoré: {business.get('name', 'Inconnu')}")
@@ -181,7 +251,17 @@ class MongoDBStorage:
 
 
 def load_and_store_data(json_file: str, mongo_host="localhost", mongo_port=27017):
-
+    """
+    Charge un fichier JSON et stocke les données en MongoDB
+    
+    Args:
+        json_file (str): Chemin vers le fichier JSON
+        mongo_host (str): Hôte MongoDB
+        mongo_port (int): Port MongoDB
+        
+    Returns:
+        bool: True si succès
+    """
     storage = MongoDBStorage(host=mongo_host, port=mongo_port)
 
     if not storage.connect():
@@ -196,6 +276,11 @@ def load_and_store_data(json_file: str, mongo_host="localhost", mongo_port=27017
             businesses = json.load(f)
 
         logger.info(f"Fichier chargé: {len(businesses)} établissements")
+
+        # Validation basique
+        if not isinstance(businesses, list):
+            logger.error("Le fichier JSON doit contenir une liste d'établissements")
+            return False
 
         stats = storage.bulk_insert(businesses)
 
@@ -215,7 +300,7 @@ def load_and_store_data(json_file: str, mongo_host="localhost", mongo_port=27017
 
 
 if __name__ == "__main__":
-
+    # Test avec un fichier par défaut
     json_file = "data/cleaned_data.json"
 
     success = load_and_store_data(json_file)
