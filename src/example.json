@@ -1,0 +1,15 @@
+{
+  "name": "nom",
+  "professional": "true/false -> certif bleu",
+  "type": "Restaurants",
+  "address": "3 boulevard Richard Lenoir 75011 Paris",
+  "avis": [
+    ["5", "avi"],
+    ["1", "avi"]
+  ],
+  "horaire":
+          [
+            ["19h00-23h00 -> Lundi"],
+            ["un element par jour de semaine"]
+          ]
+}
