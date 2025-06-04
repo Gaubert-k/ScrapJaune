@@ -1,13 +1,14 @@
 # 🕷️ ScrapJaune - Scraper PagesJaunes avec MongoDB
 
-Un système complet de scraping pour PagesJaunes.fr avec stockage automatique en base de données MongoDB.
+Un système complet de scraping pour PagesJaunes.fr avec stockage automatique en collections MongoDB organisées par type d'établissement.
 
 ## 📋 Fonctionnalités
 
 - ✅ Scraping automatisé des pages PagesJaunes.fr
 - ✅ Extraction complète des données d'établissements
 - ✅ Gestion de la pagination automatique
-- ✅ Stockage structuré en MongoDB
+- ✅ **Collections automatiques par type** : Restaurants, Coiffeurs, Dentistes, etc.
+- ✅ **Création automatique** de nouvelles collections pour nouveaux types
 - ✅ Gestion des doublons intelligente
 - ✅ Interface de menu intuitive
 - ✅ Logs détaillés
@@ -24,6 +25,40 @@ Pour chaque établissement :
 - **Horaires** d'ouverture
 - **Métadonnées** (note moyenne, nombre d'avis, etc.)
 
+## 🗃️ Organisation MongoDB
+
+### Collections automatiques par type
+
+Le système crée automatiquement une collection pour chaque type d'établissement :
+
+```
+pagesjaunes_db/
+├── restaurant/          # Collection des restaurants
+├── coiffeur/           # Collection des coiffeurs
+├── dentiste/           # Collection des dentistes
+├── boulangerie/        # Collection des boulangeries
+└── ...                 # Autres types découverts automatiquement
+```
+
+### Noms de collections automatiques
+
+Les types sont automatiquement nettoyés pour créer des noms valides :
+
+| Type original           | Collection MongoDB    |
+| ----------------------- | --------------------- |
+| "Restaurant"            | `restaurant`          |
+| "Coiffeur / Barbier"    | `coiffeur_barbier`    |
+| "Dentiste - Chirurgien" | `dentiste_chirurgien` |
+| "Auto-École"            | `auto_ecole`          |
+
+### Avantages de cette organisation
+
+✅ **Organisation claire** : Chaque secteur dans sa propre collection
+✅ **Performances optimales** : Requêtes plus rapides par type
+✅ **Évolutivité** : Nouveaux types = nouvelles collections automatiques
+✅ **Analyses sectorielles** : Statistiques par type d'activité
+✅ **Index spécialisés** : Optimisation par secteur
+
 ## 🛠️ Installation
 
 ### Prérequis
@@ -35,7 +70,7 @@ Pour chaque établissement :
 ### Installation des dépendances
 
 ```bash
-pip install selenium pymongo
+pip install -r requirements.txt
 ```
 
 ### Configuration Chrome
@@ -62,6 +97,8 @@ python main.py
 4. 🔧 Scraping uniquement (sans stockage)
 5. ❌ Quitter
 ============================================================
+💾 Mode: Collections par type d'établissement
+============================================================
 ```
 
 ### Options disponibles
@@ -83,34 +120,13 @@ ScrapJaune/
 │       └── mongodb_storage.py                # Module de stockage MongoDB
 ├── resultats/                                 # Fichiers JSON générés
 ├── scraping.log                              # Logs d'exécution
+├── requirements.txt                          # Dépendances
 └── README.md                                 # Documentation
 ```
 
-## 🗃️ Structure des données
+## 🗃️ Structure des données MongoDB
 
-### Format JSON généré par le scraper
-
-```json
-[
-  {
-    "name": "Restaurant Le Gourmet",
-    "professional": "true",
-    "type": "Restaurant",
-    "address": "123 Rue de la Paix, 75001 Paris",
-    "avis": [
-      ["4/5", "Excellent service et nourriture délicieuse"],
-      ["5/5", "Je recommande vivement ce restaurant"]
-    ],
-    "horaire": [
-      ["09:00-12:00 / 14:00-22:00 -> Lundi"],
-      ["09:00-12:00 / 14:00-22:00 -> Mardi"],
-      ["Fermé -> Dimanche"]
-    ]
-  }
-]
-```
-
-### Structure MongoDB
+### Document type dans une collection
 
 ```javascript
 {
@@ -146,17 +162,27 @@ Par défaut, le système se connecte à :
 - **Host** : localhost
 - **Port** : 27017
 - **Base** : pagesjaunes_db
-- **Collection** : pageJaune
+- **Mode** : Collections par type
 
 ### Modifier la configuration
 
 Dans `main.py` :
 
 ```python
-manager = ScrapingManager(mongo_host="votre_host", mongo_port=27017)
+manager = ScrapingManager(
+    mongo_host="votre_host",
+    mongo_port=27017
+)
 ```
 
 ## 📊 Fonctionnalités avancées
+
+### Gestion automatique des collections
+
+- **Détection automatique** : Nouveau type = nouvelle collection
+- **Nettoyage des noms** : Caractères spéciaux gérés automatiquement
+- **Index automatiques** : Chaque collection a ses propres index
+- **Statistiques par type** : Métriques détaillées par secteur
 
 ### Gestion des doublons
 
@@ -168,32 +194,39 @@ Le système utilise un hash basé sur le nom + adresse pour éviter les doublons
 
 ### Index MongoDB automatiques
 
+**Pour chaque collection :**
+
 - Index textuel sur nom + type
 - Index sur l'adresse
 - Index sur les notes et avis
 - Index unique sur le hash_id
 - Index sur le statut professionnel
+- Index sur la date d'insertion
 
-### Statistiques
+### Statistiques détaillées
 
-Le système fournit des statistiques complètes :
+```
+=== STATISTIQUES GLOBALES ===
+total_establishments: 156
+average_rating: 4.2
+collections_count: 8
 
-- Nombre d'établissements traités
-- Nouveaux insérés vs mis à jour
-- Doublons ignorés
-- Erreurs rencontrées
-- Statistiques globales de la collection
+=== DÉTAILS PAR TYPE ===
+restaurant: 45 établissements, note moyenne: 4.3
+coiffeur: 32 établissements, note moyenne: 4.1
+dentiste: 28 établissements, note moyenne: 4.5
+...
+```
 
 ## 🔧 Utilisation programmatique
 
-### Scraping seul
+### Scraping complet
 
 ```python
-from src.scrapers.pagesjaunes_simple_module import PagesJaunesScraper
+from main import ScrapingManager
 
-scraper = PagesJaunesScraper()
-fichier = scraper.executer_scraping("restaurant", "Paris")
-print(f"Résultats sauvés dans : {fichier}")
+manager = ScrapingManager()
+stats = manager.demarrer_scraping_complet("restaurant", "Paris")
 ```
 
 ### Stockage seul
@@ -204,26 +237,45 @@ from src.storage.mongodb_storage import load_and_store_data
 success = load_and_store_data("resultats/mon_fichier.json")
 ```
 
-### Processus complet
+### Accès direct aux collections
 
 ```python
-from main import ScrapingManager
+from pymongo import MongoClient
 
-manager = ScrapingManager()
-stats = manager.demarrer_scraping_complet("coiffeur", "Lyon")
-print(stats)
+client = MongoClient("localhost", 27017)
+db = client.pagesjaunes_db
+
+# Accès par type
+restaurants = db.restaurant.find({"professional": True})
+coiffeurs = db.coiffeur.find({"metadata.note_moyenne": {"$gte": 4.0}})
+dentistes = db.dentiste.find({"has_reviews": True})
+```
+
+### Requêtes utiles
+
+```python
+# Top 10 des restaurants les mieux notés
+top_restaurants = db.restaurant.find().sort("metadata.note_moyenne", -1).limit(10)
+
+# Coiffeurs professionnels à Paris
+coiffeurs_paris = db.coiffeur.find({
+    "professional": True,
+    "address": {"$regex": "Paris", "$options": "i"}
+})
+
+# Dentistes avec horaires d'ouverture
+dentistes_ouverts = db.dentiste.find({"has_schedule": True})
 ```
 
 ## 📝 Logs
 
 Les logs sont sauvegardés dans `scraping.log` et affichés en temps réel.
 
-Niveaux de log :
+Informations trackées :
 
-- **INFO** : Progression générale
-- **DEBUG** : Détails des opérations
-- **WARNING** : Avertissements non bloquants
-- **ERROR** : Erreurs importantes
+- **Collections créées** : Notification lors de création automatique
+- **Types découverts** : Liste des collections créées
+- **Statistiques par type** : Détails par secteur d'activité
 
 ## ⚠️ Limitations
 
@@ -231,6 +283,42 @@ Niveaux de log :
 - Dépendant de la structure HTML de PagesJaunes
 - Peut être affecté par les limitations de débit
 - Nécessite Chrome installé
+- **Noms de collections** : Les types très longs sont tronqués (max 50 caractères)
+
+## 💡 Exemples d'utilisation
+
+### Analyse par secteur
+
+```python
+# Comparer les notes moyennes par secteur
+pipeline = [
+    {"$group": {
+        "_id": "$type",
+        "note_moyenne": {"$avg": "$metadata.note_moyenne"},
+        "count": {"$sum": 1}
+    }},
+    {"$sort": {"note_moyenne": -1}}
+]
+
+# Exécuter sur toutes les collections
+for collection_name in db.list_collection_names():
+    if not collection_name.startswith('system.'):
+        result = list(db[collection_name].aggregate(pipeline))
+        print(f"{collection_name}: {result}")
+```
+
+### Recherche géographique
+
+```python
+# Tous les établissements d'un arrondissement
+arr_75001 = []
+for collection_name in db.list_collection_names():
+    if not collection_name.startswith('system.'):
+        results = db[collection_name].find({
+            "address": {"$regex": "75001", "$options": "i"}
+        })
+        arr_75001.extend(list(results))
+```
 
 ## 🤝 Contribution
 

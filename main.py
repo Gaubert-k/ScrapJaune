@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Script principal pour le scraping PagesJaunes et stockage MongoDB
-Lie les scripts pagesjaunes_simple.py et mongodb_storage.py
+Collections automatiques par type d'établissement
 """
 
 import os
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 class ScrapingManager:
-    """Gestionnaire principal pour le scraping et stockage"""
+    """Gestionnaire principal pour le scraping et stockage par type"""
     
     def __init__(self, mongo_host="localhost", mongo_port=27017):
         self.mongo_host = mongo_host
@@ -59,6 +59,7 @@ class ScrapingManager:
             ou = input("Où ? (ex: Paris, Lyon, 75001): ")
             
         logger.info(f"Recherche: '{quoi_qui}' à '{ou}'")
+        logger.info("Mode: Collections par type d'établissement")
         
         # 2. Lancer le scraping
         logger.info("Étape 1/3: Lancement du scraping PagesJaunes...")
@@ -212,6 +213,8 @@ def menu_principal():
         print("3. 📋 Lister les fichiers de résultats")
         print("4. 🔧 Scraping uniquement (sans stockage)")
         print("5. ❌ Quitter")
+        print("="*60)
+        print("💾 Mode: Collections par type d'établissement")
         print("="*60)
         
         choix = input("Votre choix (1-5): ").strip()
