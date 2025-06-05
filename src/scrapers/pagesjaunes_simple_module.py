@@ -29,6 +29,7 @@ class PagesJaunesScraper:
         self.headless = headless
         self.tous_les_resultats = []
         self.dossier_sortie = "resultats"
+        self.fichier_json_incrementiel = None
         
     def _configurer_driver(self):
         """Configure et lance le driver Chrome"""
@@ -38,6 +39,14 @@ class PagesJaunesScraper:
                 options.add_argument("--headless")
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
+            
+            # Réduire les logs d'erreurs SSL et autres
+            options.add_argument("--disable-logging")
+            options.add_argument("--disable-gpu-logging")
+            options.add_argument("--silent")
+            options.add_argument("--log-level=3")  # Seulement les erreurs fatales
+            options.add_experimental_option('excludeSwitches', ['enable-logging'])
+            options.add_experimental_option('useAutomationExtension', False)
             
             self.driver = webdriver.Chrome(options=options)
             logger.info("✅ Driver Chrome configuré")
@@ -137,7 +146,10 @@ class PagesJaunesScraper:
             # 1. Nom
             try:
                 nom_element = self.driver.find_element(By.CSS_SELECTOR, "h1.noTrad.no-margin")
-                donnees["name"] = nom_element.text.strip()
+                nom_brut = nom_element.text.strip()
+                # Nettoyer le nom en supprimant les textes indésirables
+                nom_nettoye = nom_brut.replace("\nOuvrir la tooltip", "").strip()
+                donnees["name"] = nom_nettoye
             except:
                 pass
             
@@ -320,7 +332,9 @@ class PagesJaunesScraper:
                         
                         if donnees_etablissement["name"]:
                             self.tous_les_resultats.append(donnees_etablissement)
-                            logger.info(f"✅ Données extraites: {donnees_etablissement['name']}")
+                            # Ajouter immédiatement au fichier JSON
+                            self._ajouter_etablissement_au_fichier(donnees_etablissement)
+                            logger.info(f"✅ Données extraites et sauvegardées: {donnees_etablissement['name']}")
                         
                         # Fermer et revenir
                         self.driver.close()
@@ -366,8 +380,8 @@ class PagesJaunesScraper:
         except Exception:
             return False
     
-    def _sauvegarder_resultats(self, quoi_qui, ou):
-        """Sauvegarde les résultats en JSON"""
+    def _initialiser_fichier_json(self, quoi_qui, ou):
+        """Initialise le fichier JSON pour sauvegarde incrémentielle"""
         if not os.path.exists(self.dossier_sortie):
             os.makedirs(self.dossier_sortie)
         
@@ -375,11 +389,56 @@ class PagesJaunesScraper:
         nom_fichier = f"resultats_pagesjaunes_{quoi_qui.replace(' ', '_')}_{ou.replace(' ', '_')}_{timestamp}.json"
         chemin_fichier = os.path.join(self.dossier_sortie, nom_fichier)
         
+        # Créer le fichier avec un tableau vide
         with open(chemin_fichier, 'w', encoding='utf-8') as f:
-            json.dump(self.tous_les_resultats, f, ensure_ascii=False, indent=2)
+            json.dump([], f, ensure_ascii=False, indent=2)
         
-        logger.info(f"💾 Résultats sauvegardés: {chemin_fichier}")
+        self.fichier_json_incrementiel = chemin_fichier
+        logger.info(f"📝 Fichier JSON initialisé: {chemin_fichier}")
         return chemin_fichier
+    
+    def _ajouter_etablissement_au_fichier(self, donnees_etablissement):
+        """Ajoute un établissement au fichier JSON de façon incrémentielle"""
+        if not self.fichier_json_incrementiel:
+            return
+        
+        try:
+            # Lire le fichier existant
+            with open(self.fichier_json_incrementiel, 'r', encoding='utf-8') as f:
+                donnees_existantes = json.load(f)
+            
+            # Ajouter le nouvel établissement
+            donnees_existantes.append(donnees_etablissement)
+            
+            # Réécrire le fichier avec toutes les données
+            with open(self.fichier_json_incrementiel, 'w', encoding='utf-8') as f:
+                json.dump(donnees_existantes, f, ensure_ascii=False, indent=2)
+            
+            logger.debug(f"➕ Établissement ajouté au fichier JSON: {donnees_etablissement.get('name', 'Sans nom')}")
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur lors de l'ajout au fichier JSON: {e}")
+    
+    def _sauvegarder_resultats(self, quoi_qui, ou):
+        """Sauvegarde les résultats en JSON (méthode de compatibilité)"""
+        if self.fichier_json_incrementiel:
+            # Si on utilise la sauvegarde incrémentielle, retourner le fichier existant
+            logger.info(f"💾 Résultats déjà sauvegardés de façon incrémentielle: {self.fichier_json_incrementiel}")
+            return self.fichier_json_incrementiel
+        else:
+            # Méthode classique pour compatibilité
+            if not os.path.exists(self.dossier_sortie):
+                os.makedirs(self.dossier_sortie)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nom_fichier = f"resultats_pagesjaunes_{quoi_qui.replace(' ', '_')}_{ou.replace(' ', '_')}_{timestamp}.json"
+            chemin_fichier = os.path.join(self.dossier_sortie, nom_fichier)
+            
+            with open(chemin_fichier, 'w', encoding='utf-8') as f:
+                json.dump(self.tous_les_resultats, f, ensure_ascii=False, indent=2)
+            
+            logger.info(f"💾 Résultats sauvegardés: {chemin_fichier}")
+            return chemin_fichier
     
     def executer_scraping(self, quoi_qui, ou):
         """
@@ -395,25 +454,28 @@ class PagesJaunesScraper:
         try:
             logger.info(f"🚀 Début du scraping: '{quoi_qui}' à '{ou}'")
             
-            # 1. Configurer le driver
-            if not self._configurer_driver():
-                return None
+            # 1. Initialiser le fichier JSON pour sauvegarde incrémentielle
+            chemin_fichier = self._initialiser_fichier_json(quoi_qui, ou)
             
-            # 2. Aller sur PagesJaunes
+            # 2. Configurer le driver
+            if not self._configurer_driver():
+                return chemin_fichier  # Retourner le fichier même si le driver échoue
+            
+            # 3. Aller sur PagesJaunes
             self.driver.get("https://www.pagesjaunes.fr")
             time.sleep(3)
             
-            # 3. Fermer la popup
+            # 4. Fermer la popup
             if not self._fermer_popup_consentement():
                 logger.error("❌ Impossible de fermer la popup")
-                return None
+                return chemin_fichier  # Retourner le fichier même si popup échoue
             
-            # 4. Lancer la recherche
+            # 5. Lancer la recherche
             if not self._lancer_recherche(quoi_qui, ou):
                 logger.error("❌ Échec de la recherche")
-                return None
+                return chemin_fichier  # Retourner le fichier même si recherche échoue
             
-            # 5. Traiter toutes les pages
+            # 6. Traiter toutes les pages
             page_actuelle = 1
             
             while True:
@@ -432,15 +494,16 @@ class PagesJaunesScraper:
                 
                 page_actuelle += 1
             
-            # 6. Sauvegarder
+            # 7. Finaliser
             logger.info(f"🎉 Scraping terminé - {len(self.tous_les_resultats)} établissements")
-            chemin_fichier = self._sauvegarder_resultats(quoi_qui, ou)
+            logger.info(f"💾 Données sauvegardées dans: {self.fichier_json_incrementiel}")
             
-            return chemin_fichier
+            return self.fichier_json_incrementiel
             
         except Exception as e:
             logger.error(f"❌ Erreur fatale du scraping: {e}")
-            return None
+            # Retourner le fichier même en cas d'erreur pour récupérer les données partielles
+            return self.fichier_json_incrementiel if self.fichier_json_incrementiel else None
             
         finally:
             if self.driver:
