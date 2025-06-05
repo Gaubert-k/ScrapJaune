@@ -51,6 +51,7 @@ class ScrapingManager:
             dict: Statistiques du processus
         """
         logger.info("=== DÉBUT DU PROCESSUS DE SCRAPING COMPLET ===")
+        logger.info("🔄 Mode: Sauvegarde incrémentielle activée")
         
         # 1. Demander les paramètres si non fournis
         if not quoi_qui:
@@ -59,7 +60,7 @@ class ScrapingManager:
             ou = input("Où ? (ex: Paris, Lyon, 75001): ")
             
         logger.info(f"Recherche: '{quoi_qui}' à '{ou}'")
-        logger.info("Mode: Collections par type d'établissement")
+        logger.info("Mode: Collections par type d'établissement + Sauvegarde incrémentielle")
         
         # 2. Lancer le scraping
         logger.info("Étape 1/3: Lancement du scraping PagesJaunes...")
@@ -68,9 +69,14 @@ class ScrapingManager:
             scraper = PagesJaunesScraper()
             fichier_json = scraper.executer_scraping(quoi_qui, ou)
             
-            if not fichier_json or not os.path.exists(fichier_json):
+            if not fichier_json:
                 logger.error("❌ Échec du scraping - Aucun fichier généré")
                 return {"success": False, "error": "Scraping échoué"}
+            
+            # Vérifier si le fichier existe (il devrait exister même si vide)
+            if not os.path.exists(fichier_json):
+                logger.error("❌ Fichier JSON non trouvé")
+                return {"success": False, "error": "Fichier JSON non trouvé"}
                 
             logger.info(f"✅ Scraping terminé - Fichier: {fichier_json}")
             
@@ -189,7 +195,7 @@ class ScrapingManager:
             return []
             
         fichiers = glob.glob(os.path.join(self.dossier_resultats, "*.json"))
-        fichiers.sort(key=os.path.getmtime, reverse=True)  # Plus récent en premier
+        fichiers.sort(key=os.path.getmtime)  # Plus ancien en premier (récent en bas)
         
         logger.info(f"{len(fichiers)} fichier(s) de résultats trouvé(s):")
         for i, fichier in enumerate(fichiers, 1):
@@ -215,6 +221,7 @@ def menu_principal():
         print("5. ❌ Quitter")
         print("="*60)
         print("💾 Mode: Collections par type d'établissement")
+        print("🔄 Sauvegarde incrémentielle: Données sauvegardées en temps réel")
         print("="*60)
         
         choix = input("Votre choix (1-5): ").strip()
