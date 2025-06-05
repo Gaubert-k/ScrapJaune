@@ -12,11 +12,11 @@ import glob
 from datetime import datetime
 import logging
 
+from src.scrapers.pagesjaunes_simple_module import PagesJaunesScraper
+from src.storage.mongodb_storage import load_and_store_data
+
 # Ajouter le dossier src au path pour les imports
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-
-from scrapers.pagesjaunes_simple_module import PagesJaunesScraper
-from storage.mongodb_storage import load_and_store_data
 
 # Configuration du logging
 logging.basicConfig(
@@ -279,10 +279,7 @@ def menu_principal():
 if __name__ == "__main__":
     try:
         # Vérifier que nous sommes dans le bon répertoire
-        if not os.path.exists("src"):
-            print("❌ ERREUR: Veuillez exécuter ce script depuis le dossier ScrapJaune")
-            print("💡 Exemple: cd ScrapJaune && python main.py")
-            sys.exit(1)
+
             
         # Créer le dossier de résultats s'il n'existe pas
         if not os.path.exists("resultats"):

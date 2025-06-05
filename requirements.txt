@@ -20,3 +20,12 @@ dnspython>=2.4.0
 # glob
 
 # Note : ChromeDriver sera géré automatiquement par Selenium 4+
+
+scrapers~=1.35
+storage~=0.0.4.3
+requests>=2.31.0              # Pour les appels LLM
+python-dotenv>=1.0.0          # Gestion .env
+geopy>=2.4.0                  # Calculs géographiques
+pandas>=2.1.0                 # Manipulation données
+numpy>=1.24.0                 # Calculs numériques
+scikit-learn>=1.3.0           # Clustering/similarité (optionnel)
