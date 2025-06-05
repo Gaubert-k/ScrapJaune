@@ -131,7 +131,7 @@ class MongoDBStorage:
             # Index sur les métadonnées
             collection.create_index("metadata.note_moyenne")
             collection.create_index("metadata.nombre_avis")
-            collection.create_index("metadata.hash_id", unique=True)
+            collection.create_index("metadata.hash_id")  # Index normal (pas unique)
 
             # Index sur le type de professionnel
             collection.create_index("professional")
@@ -145,8 +145,12 @@ class MongoDBStorage:
             logger.warning(f"Erreur lors de la création des index pour {collection.name}: {e}")
 
     def generate_hash_id(self, business: Dict) -> str:
-        # Utiliser nom + adresse pour créer un hash unique
-        identifier = f"{business.get('name', '')}-{business.get('address', '')}"
+        # Utiliser uniquement l'adresse pour créer un hash unique
+        # L'adresse est plus stable que le nom (changements de propriétaire, etc.)
+        identifier = business.get('address', '').strip()
+        if not identifier:
+            # Fallback au nom si pas d'adresse
+            identifier = business.get('name', '')
         return hashlib.md5(identifier.encode('utf-8')).hexdigest()
 
     def _extraire_note_moyenne(self, avis: List) -> float:
@@ -231,46 +235,33 @@ class MongoDBStorage:
             # Obtenir la collection appropriée
             collection = self._get_collection_for_business(business)
             document = self.prepare_document(business)
+            hash_id = self.generate_hash_id(business)
 
-            result = collection.insert_one(document)
+            # Utiliser upsert : update si existe, insert si n'existe pas
+            result = collection.update_one(
+                {"metadata.hash_id": hash_id},  # Filtre de recherche
+                {"$set": document},             # Données à insérer/mettre à jour
+                upsert=True                     # Créer si n'existe pas
+            )
 
-            if result.inserted_id:
+            if result.upserted_id:
+                # Nouveau document inséré
                 self.stats["inserted"] += 1
                 logger.debug(f"Inséré dans {collection.name}: {document['name']}")
                 return True
+            elif result.modified_count > 0:
+                # Document existant mis à jour
+                self.stats["updated"] += 1
+                logger.debug(f"Mis à jour dans {collection.name}: {document['name']}")
+                return True
             else:
-                self.stats["errors"] += 1
-                return False
-
-        except DuplicateKeyError:
-            # Établissement déjà existant - tentative de mise à jour
-            try:
-                collection = self._get_collection_for_business(business)
-                hash_id = self.generate_hash_id(business)
-                document = self.prepare_document(business)
-
-                # Mise à jour au lieu d'insertion
-                result = collection.update_one(
-                    {"metadata.hash_id": hash_id},
-                    {"$set": document}
-                )
-
-                if result.modified_count > 0:
-                    self.stats["updated"] += 1
-                    logger.debug(f"Mis à jour dans {collection.name}: {business.get('name', 'Inconnu')}")
-                else:
-                    self.stats["duplicates"] += 1
-                    logger.debug(f"Doublon ignoré dans {collection.name}: {business.get('name', 'Inconnu')}")
-
+                # Aucun changement (données identiques)
+                self.stats["duplicates"] += 1
+                logger.debug(f"Doublon ignoré dans {collection.name}: {document['name']}")
                 return True
 
-            except Exception as e:
-                logger.error(f"Erreur lors de la mise à jour: {e}")
-                self.stats["errors"] += 1
-                return False
-
         except Exception as e:
-            logger.error(f"Erreur lors de l'insertion: {e}")
+            logger.error(f"Erreur lors de l'insertion/mise à jour: {e}")
             self.stats["errors"] += 1
             return False
 
